@@ -1,5 +1,7 @@
 # Knowledge Twin
 
+[Live Interactive Demo](https://maharshimak.github.io/makma-ai-os/projects/knowledge-twin/) · [AI Systems Lab](https://maharshimak.github.io/makma-ai-os/projects/)
+
 In-memory entity and relationship graph for evidence-bearing edges, directed traversal and keyword retrieval.
 
 ## Implemented now
