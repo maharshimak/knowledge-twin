@@ -1,6 +1,8 @@
 # Knowledge Twin
 
-[Live Interactive Demo](https://maharshimak.github.io/makma-ai-os/projects/knowledge-twin/) · [AI Systems Lab](https://maharshimak.github.io/makma-ai-os/projects/)
+**A MAK'MA Studio Product · MAK'MA Labs**
+
+[Live Product Demo](https://maharshimak.github.io/makma-ai-os/projects/knowledge-twin/) · [MAK'MA Labs](https://maharshimak.github.io/makma-ai-os/projects/)
 
 In-memory entity and relationship graph for evidence-bearing edges, directed traversal and keyword retrieval.
 
