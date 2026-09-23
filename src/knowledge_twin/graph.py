@@ -1,5 +1,7 @@
+import re
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,22 @@ class Edge:
     relation: str
     target: str
     evidence: str = ""
+
+
+@dataclass(frozen=True)
+class ResolutionCandidate:
+    entity: Entity
+    score: float
+    sequence_similarity: float
+    token_jaccard: float
+
+
+def _normalized(text: str) -> str:
+    return " ".join(re.findall(r"\w+", text.casefold(), flags=re.UNICODE))
+
+
+def _tokens(text: str) -> set[str]:
+    return set(_normalized(text).split())
 
 
 class KnowledgeGraph:
@@ -61,15 +79,49 @@ class KnowledgeGraph:
     def search(self, query: str, top_k: int = 5) -> list[Entity]:
         if type(top_k) is not int or top_k <= 0:
             raise ValueError("top_k must be positive.")
-        terms = set(query.lower().split())
+        terms = _tokens(query)
+        if not terms:
+            return []
         scored = []
         for entity in self.entities.values():
-            text = f"{entity.name} {entity.description}".lower()
+            text = _normalized(f"{entity.name} {entity.description}")
             score = sum(term in text for term in terms)
             scored.append((score, entity))
 
-        ordered = sorted(scored, key=lambda x: x[0], reverse=True)
+        ordered = sorted(scored, key=lambda x: (-x[0], x[1].id))
         return [entity for score, entity in ordered if score > 0][:top_k]
+
+    def resolve(self, query: str, top_k: int = 5) -> list[ResolutionCandidate]:
+        """Rank likely entity identities using explicit non-probabilistic similarity."""
+        if type(top_k) is not int or top_k <= 0:
+            raise ValueError("top_k must be positive.")
+        normalized_query = _normalized(query)
+        if not normalized_query:
+            return []
+        query_tokens = _tokens(normalized_query)
+        candidates: list[ResolutionCandidate] = []
+        for entity in self.entities.values():
+            normalized_name = _normalized(entity.name)
+            normalized_id = _normalized(entity.id)
+            sequence = max(
+                SequenceMatcher(None, normalized_query, normalized_name).ratio(),
+                SequenceMatcher(None, normalized_query, normalized_id).ratio(),
+            )
+            name_tokens = _tokens(normalized_name)
+            union = query_tokens | name_tokens
+            jaccard = len(query_tokens & name_tokens) / len(union) if union else 0.0
+            exact_bonus = 0.15 if normalized_query in {normalized_name, normalized_id} else 0.0
+            score = min(1.0, 0.65 * sequence + 0.35 * jaccard + exact_bonus)
+            candidates.append(
+                ResolutionCandidate(
+                    entity=entity,
+                    score=round(score, 6),
+                    sequence_similarity=round(sequence, 6),
+                    token_jaccard=round(jaccard, 6),
+                )
+            )
+        candidates.sort(key=lambda item: (-item.score, item.entity.id))
+        return candidates[:top_k]
 
     def shortest_path(self, source: str, target: str) -> list[Edge] | None:
         """Return a shortest directed evidence path; None means unreachable."""
