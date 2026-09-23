@@ -4,7 +4,7 @@
 
 [Live Product Demo](https://maharshimak.github.io/makma-ai-os/projects/knowledge-twin/) · [MAK'MA Labs](https://maharshimak.github.io/makma-ai-os/projects/)
 
-In-memory entity and relationship graph for evidence-bearing edges, directed traversal and keyword retrieval.
+Evidence-bearing entity and relationship graph with directed traversal, keyword retrieval and optional SQLite persistence.
 
 
 ## Product contract — engineering upgrade
@@ -19,7 +19,7 @@ In-memory entity and relationship graph for evidence-bearing edges, directed tra
 
 **Architecture:** `makma-ai-os/demo` is the shared web product source and Pages deployment. This repository owns its Python domain package. The central `tests/e2e` suite exercises all nine products; `tests/fixtures/python-parity.json` plus `scripts/generate_parity.py` guard shared mathematical contracts. Backend revisions used for regeneration are pinned in the central `backend-lock.json`.
 
-**Safety and limitations:** No graph database, automatic entity ingestion or ontology inference. Graph evidence is supplied by the user, not externally verified. Browser caps: 200 entities and 1000 relationships. Inputs are validated, rendered user values are escaped, and deterministic results are not presented as model inference.
+**Safety and limitations:** SQLite persistence is available, but there is no dedicated graph database, automatic entity ingestion, semantic embedding pipeline or ontology inference. Graph evidence is supplied by the user, not externally verified. Browser caps: 200 entities and 1000 relationships. Inputs are validated, rendered user values are escaped, and deterministic results are not presented as model inference.
 
 **Verification:** Run `python -m ruff check .` and `python -m pytest -q`. `tests/test_engineering_upgrade.py` protects the new rejection/correctness paths. Central web checks: `npm ci`, `npm test`, `npm run build`, `npx playwright install --with-deps chromium`, `npm run test:e2e`. CI gates publishing on browser interactions and validates all public URLs after deployment.
 
@@ -33,10 +33,11 @@ In-memory entity and relationship graph for evidence-bearing edges, directed tra
 - Typed entities and directed edges with evidence strings.
 - Endpoint validation and breadth-first neighborhood traversal with cycle handling.
 - Keyword/sub-string matching over names and descriptions; explicit traversal input validation.
+- Optional SQLite graph persistence that round-trips entities, directed relationships and evidence strings.
 
 ## Scope and limitations
 
-Entities and edges are supplied by the caller. There is no automatic entity extraction, trained semantic retrieval, LLM reasoning or graph database. Search uses substring matches and insertion-order ties. Adding an existing entity ID replaces its record. All graph state is in memory; evidence strings are not independently verified.
+Entities and edges are supplied by the caller. There is no automatic entity extraction, trained semantic retrieval, LLM reasoning or dedicated graph database. Search uses substring matches and insertion-order ties. Duplicate entity IDs are rejected. State can remain in memory or be explicitly saved/reloaded through the SQLite graph store; evidence strings are persisted but are not independently verified.
 
 ## Installation and development
 
