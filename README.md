@@ -23,6 +23,8 @@ Evidence-bearing entity and relationship graph with directed traversal, keyword 
 
 **Verification:** Run `python -m ruff check .` and `python -m pytest -q`. `tests/test_engineering_upgrade.py` protects the new rejection/correctness paths. Central web checks: `npm ci`, `npm test`, `npm run build`, `npx playwright install --with-deps chromium`, `npm run test:e2e`. CI gates publishing on browser interactions and validates all public URLs after deployment.
 
+**Grounded graph extraction:** the optional OpenAI-compatible extractor builds entities and relationships from source text but rejects any relationship whose evidence is not a verbatim substring of the source, preserving an explicit anti-hallucination boundary.
+
 **Highest-value next work:** Versioned graph imports, provenance sources and conflict-aware human entity merging.
 
 **Provenance:** Independent MAK’MA Studio engineering implementation; examples are synthetic and no employer code or data is included. Existing MIT license applies.
