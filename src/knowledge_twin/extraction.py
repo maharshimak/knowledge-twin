@@ -77,14 +77,14 @@ class OpenAICompatibleGraphExtractor:
         entities = payload.get("entities")
         edges = payload.get("edges")
         if not isinstance(entities, list) or not isinstance(edges, list):
-            raise ValueError("Graph JSON must contain entities and edges arrays.")
+            raise TypeError("Graph JSON must contain entities and edges arrays.")
         if len(entities) > self.max_entities or len(edges) > self.max_edges:
             raise ValueError("Extracted graph exceeds configured limits.")
 
         graph = KnowledgeGraph()
         for item in entities:
             if not isinstance(item, dict):
-                raise ValueError("Each entity must be an object.")
+                raise TypeError("Each entity must be an object.")
             graph.add_entity(
                 Entity(
                     id=str(item.get("id", "")).strip(),
@@ -97,7 +97,7 @@ class OpenAICompatibleGraphExtractor:
         source_casefold = source_text.casefold()
         for item in edges:
             if not isinstance(item, dict):
-                raise ValueError("Each edge must be an object.")
+                raise TypeError("Each edge must be an object.")
             evidence = str(item.get("evidence", "")).strip()
             if not evidence:
                 raise ValueError("Every extracted relationship requires evidence.")
