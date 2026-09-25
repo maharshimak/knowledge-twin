@@ -1,3 +1,4 @@
+from .extraction import GraphExtraction, OpenAICompatibleGraphExtractor
 from .graph import Edge, Entity, KnowledgeGraph
 from .resolution import ResolutionMatch, entity_similarity, normalize_entity_name, resolve_entity
 from .storage import SQLiteGraphStore
@@ -5,7 +6,9 @@ from .storage import SQLiteGraphStore
 __all__ = [
     "Edge",
     "Entity",
+    "GraphExtraction",
     "KnowledgeGraph",
+    "OpenAICompatibleGraphExtractor",
     "ResolutionMatch",
     "SQLiteGraphStore",
     "entity_similarity",
