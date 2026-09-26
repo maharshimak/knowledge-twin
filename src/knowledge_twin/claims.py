@@ -15,9 +15,10 @@ class Claim:
     observed_at: str | None = None
 
     def __post_init__(self) -> None:
-        if any(not isinstance(value, str) or not value.strip() for value in (
-            self.subject, self.predicate, self.object, self.evidence
-        )):
+        if any(
+            not isinstance(value, str) or not value.strip()
+            for value in (self.subject, self.predicate, self.object, self.evidence)
+        ):
             raise ValueError("claim subject, predicate, object and evidence are required")
         if not isfinite(self.confidence) or not 0 <= self.confidence <= 1:
             raise ValueError("confidence must be between 0 and 1")
@@ -60,7 +61,7 @@ class ClaimLedger:
                 grouped[(claim.subject.casefold(), claim.predicate.casefold())].append(claim)
 
         conflicts: list[ClaimConflict] = []
-        for (_subject_key, _predicate_key), claims in grouped.items():
+        for claims in grouped.values():
             objects = sorted({claim.object.strip() for claim in claims}, key=str.casefold)
             if len(objects) < 2:
                 continue
@@ -72,7 +73,12 @@ class ClaimLedger:
                     claims=tuple(claims),
                 )
             )
-        return tuple(sorted(conflicts, key=lambda item: (item.subject.casefold(), item.predicate.casefold())))
+        return tuple(
+            sorted(
+                conflicts,
+                key=lambda item: (item.subject.casefold(), item.predicate.casefold()),
+            )
+        )
 
     def best_supported(self, subject: str, predicate: str) -> Claim | None:
         candidates = self.claims_for(subject, predicate)
