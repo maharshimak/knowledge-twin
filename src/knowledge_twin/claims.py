@@ -4,6 +4,19 @@ from collections import defaultdict
 from dataclasses import dataclass
 from math import isfinite
 
+_DEFAULT_MULTI_VALUED_PREDICATES = frozenset(
+    {
+        "has_skill",
+        "worked_at",
+        "member_of",
+        "uses",
+        "authored",
+        "participated_in",
+        "related_to",
+        "knows",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Claim:
@@ -35,8 +48,22 @@ class ClaimConflict:
 class ClaimLedger:
     """Evidence-first claim store with deterministic contradiction detection."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        multi_valued_predicates: frozenset[str] | None = None,
+    ) -> None:
         self._claims: list[Claim] = []
+        configured = (
+            _DEFAULT_MULTI_VALUED_PREDICATES
+            if multi_valued_predicates is None
+            else multi_valued_predicates
+        )
+        self._multi_valued_predicates = frozenset(
+            predicate.casefold().strip()
+            for predicate in configured
+            if predicate.strip()
+        )
 
     def add(self, claim: Claim) -> None:
         if claim not in self._claims:
@@ -62,17 +89,37 @@ class ClaimLedger:
 
         conflicts: list[ClaimConflict] = []
         for claims in grouped.values():
-            objects = sorted({claim.object.strip() for claim in claims}, key=str.casefold)
-            if len(objects) < 2:
+            predicate_key = claims[0].predicate.casefold().strip()
+            if predicate_key in self._multi_valued_predicates:
                 continue
-            conflicts.append(
-                ClaimConflict(
-                    subject=claims[0].subject,
-                    predicate=claims[0].predicate,
-                    objects=tuple(objects),
-                    claims=tuple(claims),
+
+            # When every claim carries an observation time, compare values only
+            # within the same observation. A status changing over time is history,
+            # not a contradiction.
+            groups: list[list[Claim]]
+            if all(claim.observed_at is not None for claim in claims):
+                by_time: dict[str, list[Claim]] = defaultdict(list)
+                for claim in claims:
+                    by_time[str(claim.observed_at)].append(claim)
+                groups = list(by_time.values())
+            else:
+                groups = [claims]
+
+            for candidate_claims in groups:
+                objects = sorted(
+                    {claim.object.strip() for claim in candidate_claims},
+                    key=str.casefold,
                 )
-            )
+                if len(objects) < 2:
+                    continue
+                conflicts.append(
+                    ClaimConflict(
+                        subject=candidate_claims[0].subject,
+                        predicate=candidate_claims[0].predicate,
+                        objects=tuple(objects),
+                        claims=tuple(candidate_claims),
+                    )
+                )
         return tuple(
             sorted(
                 conflicts,
