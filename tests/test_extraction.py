@@ -52,3 +52,28 @@ def test_graph_extraction_rejects_hallucinated_evidence():
             }
             """,
         )
+
+
+
+def test_graph_extraction_rejects_evidence_for_different_entities():
+    source = "Maharshi works at MAKMA. John specializes in NLP."
+    with pytest.raises(ValueError, match="endpoint entities"):
+        extractor().parse(
+            source,
+            """
+            {
+              "entities": [
+                {"id":"maharshi","kind":"person","name":"Maharshi","description":""},
+                {"id":"nlp","kind":"topic","name":"NLP","description":""}
+              ],
+              "edges": [
+                {
+                  "source":"maharshi",
+                  "relation":"SPECIALIZES_IN",
+                  "target":"nlp",
+                  "evidence":"John specializes in NLP."
+                }
+              ]
+            }
+            """,
+        )
