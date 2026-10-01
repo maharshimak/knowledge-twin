@@ -82,32 +82,44 @@ class OpenAICompatibleGraphExtractor:
             raise ValueError("Extracted graph exceeds configured limits.")
 
         graph = KnowledgeGraph()
+        entity_names: dict[str, str] = {}
         for item in entities:
             if not isinstance(item, dict):
                 raise TypeError("Each entity must be an object.")
-            graph.add_entity(
-                Entity(
-                    id=str(item.get("id", "")).strip(),
-                    kind=str(item.get("kind", "")).strip(),
-                    name=str(item.get("name", "")).strip(),
-                    description=str(item.get("description", "")).strip(),
-                )
+            entity = Entity(
+                id=str(item.get("id", "")).strip(),
+                kind=str(item.get("kind", "")).strip(),
+                name=str(item.get("name", "")).strip(),
+                description=str(item.get("description", "")).strip(),
             )
+            graph.add_entity(entity)
+            entity_names[entity.id] = entity.name
 
         source_casefold = source_text.casefold()
         for item in edges:
             if not isinstance(item, dict):
                 raise TypeError("Each edge must be an object.")
             evidence = str(item.get("evidence", "")).strip()
+            source_id = str(item.get("source", "")).strip()
+            target_id = str(item.get("target", "")).strip()
             if not evidence:
                 raise ValueError("Every extracted relationship requires evidence.")
             if evidence.casefold() not in source_casefold:
                 raise ValueError("Relationship evidence must be a verbatim source substring.")
+            if source_id not in entity_names or target_id not in entity_names:
+                raise ValueError("Relationship endpoints must reference extracted entities.")
+            evidence_key = evidence.casefold()
+            source_name = entity_names[source_id].casefold()
+            target_name = entity_names[target_id].casefold()
+            if source_name not in evidence_key or target_name not in evidence_key:
+                raise ValueError(
+                    "Relationship evidence must explicitly mention both endpoint entities."
+                )
             graph.add_edge(
                 Edge(
-                    source=str(item.get("source", "")).strip(),
+                    source=source_id,
                     relation=str(item.get("relation", "")).strip(),
-                    target=str(item.get("target", "")).strip(),
+                    target=target_id,
                     evidence=evidence,
                 )
             )
