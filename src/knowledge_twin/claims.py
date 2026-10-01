@@ -4,7 +4,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from math import isfinite
 
-
 _DEFAULT_MULTI_VALUED_PREDICATES = frozenset(
     {
         "has_skill",
