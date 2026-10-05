@@ -88,6 +88,25 @@ class KnowledgeGraph:
             limit=top_k,
         )
 
+    def resolve_one(
+        self,
+        query: str,
+        *,
+        kind: str | None = None,
+        min_score: float = 0.82,
+        min_margin: float = 0.08,
+    ):
+        """Resolve a single entity only when the identity is not ambiguous."""
+        from knowledge_twin.resolution import resolve_unique_entity
+
+        return resolve_unique_entity(
+            query,
+            list(self.entities.values()),
+            min_score=min_score,
+            min_margin=min_margin,
+            kind=kind,
+        )
+
     def shortest_path(self, source: str, target: str) -> list[Edge] | None:
         """Return a shortest directed evidence path; None means unreachable."""
         if source not in self.entities or target not in self.entities:

@@ -1,7 +1,12 @@
 import pytest
 
 from knowledge_twin.graph import Entity
-from knowledge_twin.resolution import entity_similarity, normalize_entity_name, resolve_entity
+from knowledge_twin.resolution import (
+    entity_similarity,
+    normalize_entity_name,
+    resolve_entity,
+    resolve_unique_entity,
+)
 
 
 def test_name_normalization_handles_case_punctuation_and_accents() -> None:
@@ -24,6 +29,32 @@ def test_resolution_returns_ranked_matches() -> None:
 
     assert [match.entity.id for match in matches] == ["1", "2"]
     assert matches[0].score >= matches[1].score
+
+
+def test_unique_resolution_refuses_ambiguous_canonical_duplicates() -> None:
+    entities = [
+        Entity(id="a", kind="company", name="Acme Corporation"),
+        Entity(id="b", kind="company", name="ACME Corp."),
+    ]
+
+    decision = resolve_unique_entity("Acme Corp", entities, min_score=0.65)
+
+    assert decision.match is None
+    assert decision.ambiguous is True
+    assert {item.entity.id for item in decision.alternatives} == {"a", "b"}
+
+
+def test_unique_resolution_can_filter_by_kind() -> None:
+    entities = [
+        Entity(id="person", kind="person", name="Jordan Lee"),
+        Entity(id="company", kind="company", name="Jordan Lee"),
+    ]
+
+    decision = resolve_unique_entity("Jordan Lee", entities, kind="person")
+
+    assert decision.match is not None
+    assert decision.match.entity.id == "person"
+    assert decision.ambiguous is False
 
 
 def test_resolution_validates_threshold() -> None:
