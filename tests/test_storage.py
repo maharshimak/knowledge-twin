@@ -19,7 +19,7 @@ def test_sqlite_graph_store_round_trips_entities_edges_and_evidence(tmp_path) ->
     assert restored.shortest_path("rag", "db") == restored.edges
 
 
-def test_graph_load_uses_single_snapshot_transaction(tmp_path, monkeypatch):
+def test_graph_load_uses_single_snapshot_transaction(tmp_path):
     import sqlite3
     from unittest.mock import patch
 
