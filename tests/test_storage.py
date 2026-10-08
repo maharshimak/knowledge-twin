@@ -31,22 +31,13 @@ def test_graph_load_uses_single_snapshot_transaction(tmp_path):
     real_connect = sqlite3.connect
     statements = []
 
-    class ObservedConnection:
-        def __init__(self, inner):
-            self.inner = inner
+    def traced_connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        connection.set_trace_callback(statements.append)
+        return connection
 
-        def execute(self, sql, *args, **kwargs):
-            statements.append(sql)
-            return self.inner.execute(sql, *args, **kwargs)
-
-        def __getattr__(self, name):
-            return getattr(self.inner, name)
-
-        def close(self):
-            self.inner.close()
-
-    with patch("knowledge_twin.storage.sqlite3.connect", side_effect=lambda *a, **k: ObservedConnection(real_connect(*a, **k))):
+    with patch("knowledge_twin.storage.sqlite3.connect", side_effect=traced_connect):
         restored = store.load()
 
-    assert "BEGIN" in statements
+    assert any(sql.strip().upper() == "BEGIN" for sql in statements)
     assert restored.entities["one"].name == "One"
