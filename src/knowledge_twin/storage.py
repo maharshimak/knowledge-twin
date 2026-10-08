@@ -68,6 +68,9 @@ class SQLiteGraphStore:
         graph = KnowledgeGraph()
         with closing(sqlite3.connect(self.path)) as connection:
             connection.row_factory = sqlite3.Row
+            # Both queries must observe one consistent snapshot even when a
+            # concurrent writer replaces the graph.
+            connection.execute("BEGIN")
             entities = connection.execute(
                 "SELECT id, kind, name, description FROM entities ORDER BY id"
             ).fetchall()
