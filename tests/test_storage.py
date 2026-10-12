@@ -80,7 +80,7 @@ def test_graph_load_remains_coherent_when_writer_commits_between_reads(tmp_path)
     def read_snapshot():
         try:
             outcome["graph"] = store.load()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - forward thread failure to test
             outcome["error"] = error
 
     with patch("knowledge_twin.storage.sqlite3.connect", side_effect=traced_connect):
