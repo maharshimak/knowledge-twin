@@ -100,3 +100,80 @@ def test_graph_load_remains_coherent_when_writer_commits_between_reads(tmp_path)
     snapshot = outcome["graph"]
     assert set(snapshot.entities) == {"a", "b"}
     assert [(e.source, e.target) for e in snapshot.edges] == [("a", "b")]
+
+
+def test_loaded_graph_cannot_overwrite_newer_writer_changes(tmp_path):
+    import pytest
+
+    path = tmp_path / "graph.db"
+    first = SQLiteGraphStore(path)
+    second = SQLiteGraphStore(path)
+    original = KnowledgeGraph()
+    original.add_entity(Entity("seed", "test", "Seed"))
+    first.save(original)
+
+    first_copy = first.load()
+    stale_copy = second.load()
+    first_copy.add_entity(Entity("first", "test", "First writer"))
+    first.save(first_copy)
+
+    stale_copy.add_entity(Entity("stale", "test", "Old writer"))
+    with pytest.raises(RuntimeError, match="changed since it was loaded"):
+        second.save(stale_copy)
+
+    restored = first.load()
+    assert set(restored.entities) == {"seed", "first"}
+    assert "stale" not in restored.entities
+
+    # The writer can resolve the conflict by reloading the latest revision.
+    corrected = second.load()
+    corrected.add_entity(Entity("second", "test", "Second writer"))
+    second.save(corrected)
+    assert set(first.load().entities) == {"seed", "first", "second"}
+
+
+def test_fresh_graph_replacement_remains_backwards_compatible(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "graph.db"
+    store = SQLiteGraphStore(db)
+    original = KnowledgeGraph()
+    original.add_entity(Entity("old", "test", "Old"))
+    store.save(original)
+
+    replacement = KnowledgeGraph()
+    replacement.add_entity(Entity("new", "test", "New"))
+    store.save(replacement)
+
+    assert set(store.load().entities) == {"new"}
+    with sqlite3.connect(db) as connection:
+        revision = connection.execute(
+            "SELECT version FROM graph_meta WHERE id = 1"
+        ).fetchone()[0]
+    assert revision == 2
+
+
+def test_failed_graph_save_does_not_advance_revision(tmp_path, monkeypatch):
+    import sqlite3
+
+    path = tmp_path / "graph.db"
+    store = SQLiteGraphStore(path)
+    initial = KnowledgeGraph()
+    initial.add_entity(Entity("a", "test", "A"))
+    store.save(initial)
+    loaded = store.load()
+
+    # Force an integrity error *after* clearing the original rows; the
+    # database transaction must roll back the graph and version together.
+    loaded.entities["bad"] = Entity("a", "test", "Duplicate primary key")
+    import pytest
+    with pytest.raises(sqlite3.IntegrityError):
+        store.save(loaded)
+
+    persisted = store.load()
+    assert set(persisted.entities) == {"a"}
+    assert persisted.entities["a"].name == "A"
+    with sqlite3.connect(path) as connection:
+        assert connection.execute(
+            "SELECT version FROM graph_meta WHERE id = 1"
+        ).fetchone()[0] == 1

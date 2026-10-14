@@ -33,14 +33,37 @@ class SQLiteGraphStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source);
                 CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target);
+                CREATE TABLE IF NOT EXISTS graph_meta (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    version INTEGER NOT NULL
+                );
+                INSERT OR IGNORE INTO graph_meta(id, version) VALUES (1, 0);
                 """
             )
             connection.commit()
 
     def save(self, graph: KnowledgeGraph) -> None:
+        """Replace a graph, refusing stale snapshots loaded from this database.
+
+        Freshly constructed graphs may still intentionally replace the store;
+        a loaded graph retains its version for optimistic conflict detection.
+        """
+        origin = str(Path(self.path).resolve())
         with closing(sqlite3.connect(self.path)) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
             with connection:
+                # Serialize writers before reading the version. A deferred write
+                # transaction would allow a second writer to read stale metadata.
+                connection.execute("BEGIN IMMEDIATE")
+                current_version = connection.execute(
+                    "SELECT version FROM graph_meta WHERE id = 1"
+                ).fetchone()[0]
+                expected_version = getattr(graph, "_storage_revision", None)
+                loaded_from = getattr(graph, "_storage_origin", None)
+                if loaded_from == origin and expected_version != current_version:
+                    raise RuntimeError(
+                        "Graph changed since it was loaded; reload before saving."
+                    )
                 connection.execute("DELETE FROM edges")
                 connection.execute("DELETE FROM entities")
                 connection.executemany(
@@ -63,6 +86,12 @@ class SQLiteGraphStore:
                         for edge in graph.edges
                     ],
                 )
+                connection.execute(
+                    "UPDATE graph_meta SET version = version + 1 WHERE id = 1"
+                )
+            # Advance a loaded or fresh graph's revision only after commit.
+            graph._storage_origin = origin
+            graph._storage_revision = current_version + 1
 
     def load(self) -> KnowledgeGraph:
         graph = KnowledgeGraph()
@@ -71,6 +100,9 @@ class SQLiteGraphStore:
             # Both queries must observe one consistent snapshot even when a
             # concurrent writer replaces the graph.
             connection.execute("BEGIN")
+            revision = connection.execute(
+                "SELECT version FROM graph_meta WHERE id = 1"
+            ).fetchone()[0]
             entities = connection.execute(
                 "SELECT id, kind, name, description FROM entities ORDER BY id"
             ).fetchall()
@@ -96,4 +128,6 @@ class SQLiteGraphStore:
                     evidence=row["evidence"],
                 )
             )
+        graph._storage_origin = str(Path(self.path).resolve())
+        graph._storage_revision = revision
         return graph
