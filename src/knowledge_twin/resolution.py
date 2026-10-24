@@ -35,8 +35,10 @@ def normalize_entity_name(value: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("entity name must be a non-empty string")
     decomposed = unicodedata.normalize("NFKD", value)
-    ascii_text = "".join(char for char in decomposed if not unicodedata.combining(char))
-    tokens = re.findall(r"[a-z0-9]+", ascii_text.casefold())
+    unaccented_text = "".join(char for char in decomposed if not unicodedata.combining(char))
+    tokens = re.findall(r"[^\W_]+", unaccented_text.casefold(), flags=re.UNICODE)
+    if not tokens:
+        raise ValueError("entity name must contain at least one letter or number")
     canonical = [_LEGAL_SUFFIXES.get(token, token) for token in tokens]
     return " ".join(canonical)
 
