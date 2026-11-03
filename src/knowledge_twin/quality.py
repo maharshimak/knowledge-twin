@@ -11,6 +11,8 @@ class GraphQuality:
     duplicate_edge_count: int
     evidence_coverage: float
     connected_components: int
+    dangling_edge_count: int = 0
+    self_loop_count: int = 0
 
 
 def analyze_graph(graph: KnowledgeGraph) -> GraphQuality:
@@ -19,15 +21,24 @@ def analyze_graph(graph: KnowledgeGraph) -> GraphQuality:
     signatures: set[tuple[str, str, str]] = set()
     duplicate_edges = 0
     evidenced = 0
+    dangling = 0
+    self_loops = 0
     undirected = {entity_id: set() for entity_id in entity_ids}
 
     for edge in graph.edges:
+        if edge.source == edge.target:
+            self_loops += 1
+        if edge.source not in entity_ids or edge.target not in entity_ids:
+            # A dangling edge (e.g. after deleting an entity directly) must be
+            # reported, not crash the analysis.
+            dangling += 1
+            continue
         referenced.update((edge.source, edge.target))
         signature = (edge.source, edge.relation, edge.target)
         if signature in signatures:
             duplicate_edges += 1
         signatures.add(signature)
-        if edge.evidence.strip():
+        if isinstance(edge.evidence, str) and edge.evidence.strip():
             evidenced += 1
         undirected[edge.source].add(edge.target)
         undirected[edge.target].add(edge.source)
@@ -54,6 +65,8 @@ def analyze_graph(graph: KnowledgeGraph) -> GraphQuality:
         duplicate_edge_count=duplicate_edges,
         evidence_coverage=evidenced / edge_count if edge_count else 1.0,
         connected_components=components,
+        dangling_edge_count=dangling,
+        self_loop_count=self_loops,
     )
 
 
@@ -69,6 +82,8 @@ def assert_graph_quality(
     reasons: list[str] = []
     if report.evidence_coverage < min_evidence_coverage:
         reasons.append("insufficient evidence coverage")
+    if report.dangling_edge_count:
+        reasons.append("dangling relationships detected")
     if report.duplicate_edge_count:
         reasons.append("duplicate relationships detected")
     if report.orphan_count and not allow_orphans:
