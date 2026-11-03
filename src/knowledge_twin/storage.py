@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 
-from knowledge_twin.graph import Edge, Entity, KnowledgeGraph
+from knowledge_twin.graph import Edge, Entity, EvidenceSpan, KnowledgeGraph
+
+# Columns added after the original schema; existing databases are migrated in
+# place with ALTER TABLE so previously saved graphs keep loading.
+_EDGE_MIGRATIONS = {
+    "origin": "ALTER TABLE edges ADD COLUMN origin TEXT NOT NULL DEFAULT 'unspecified'",
+    "provenance": "ALTER TABLE edges ADD COLUMN provenance TEXT",
+    "retracted": "ALTER TABLE edges ADD COLUMN retracted INTEGER NOT NULL DEFAULT 0",
+}
 
 
 class SQLiteGraphStore:
@@ -35,6 +44,10 @@ class SQLiteGraphStore:
                 CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target);
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(edges)")}
+            for column, statement in _EDGE_MIGRATIONS.items():
+                if column not in columns:
+                    connection.execute(statement)
             connection.commit()
 
     def save(self, graph: KnowledgeGraph) -> None:
@@ -55,12 +68,23 @@ class SQLiteGraphStore:
                 )
                 connection.executemany(
                     """
-                    INSERT INTO edges(source, relation, target, evidence)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO edges(
+                        source, relation, target, evidence, origin, provenance, retracted
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
-                        (edge.source, edge.relation, edge.target, edge.evidence)
-                        for edge in graph.edges
+                        (
+                            edge.source,
+                            edge.relation,
+                            edge.target,
+                            edge.evidence,
+                            edge.origin,
+                            _provenance_json(edge),
+                            retracted,
+                        )
+                        for retracted, edges in ((0, graph.edges), (1, graph.retracted_edges))
+                        for edge in edges
                     ],
                 )
 
@@ -72,7 +96,8 @@ class SQLiteGraphStore:
                 "SELECT id, kind, name, description FROM entities ORDER BY id"
             ).fetchall()
             edges = connection.execute(
-                "SELECT source, relation, target, evidence FROM edges ORDER BY id"
+                "SELECT source, relation, target, evidence, origin, provenance, retracted "
+                "FROM edges ORDER BY id"
             ).fetchall()
 
         for row in entities:
@@ -85,12 +110,26 @@ class SQLiteGraphStore:
                 )
             )
         for row in edges:
-            graph.add_edge(
-                Edge(
-                    source=row["source"],
-                    relation=row["relation"],
-                    target=row["target"],
-                    evidence=row["evidence"],
-                )
+            edge = Edge(
+                source=row["source"],
+                relation=row["relation"],
+                target=row["target"],
+                evidence=row["evidence"],
+                origin=row["origin"],
+                provenance=(
+                    EvidenceSpan.from_dict(json.loads(row["provenance"]))
+                    if row["provenance"] is not None
+                    else None
+                ),
             )
+            if row["retracted"]:
+                graph.retracted_edges.append(edge)
+            else:
+                graph.add_edge(edge)
         return graph
+
+
+def _provenance_json(edge: Edge) -> str | None:
+    if edge.provenance is None:
+        return None
+    return json.dumps(edge.provenance.to_dict(), sort_keys=True, ensure_ascii=False)
